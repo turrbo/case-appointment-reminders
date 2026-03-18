@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Case Appointment Reminders</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+/* Mueller Brand Colors */
+:root {
+  --primary: #C8102E;
+  --primary-hover: #DA1931;
+  --heading: #292929;
+  --body-text: #77777A;
+  --secondary-text: #949494;
+  --bg-section: #F4F3F3;
+  --border-color: #E4E4E4;
+  --dark-charcoal: #1E1E1E;
+  --white: #ffffff;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--body-text);
+  background: var(--bg-section);
+  min-height: 100vh;
+}
+.app { min-height:100vh; display:flex; flex-direction:column; }
+
+/* Header */
+.app-header {
+  background: var(--white);
+  border-bottom: 3px solid var(--primary);
+  padding: 20px 32px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.header-content {
+  max-width:1400px; margin:0 auto;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+.header-left h1 { color:var(--heading); font-size:24px; font-weight:700; margin-bottom:4px; }
+.subtitle { color:var(--secondary-text); font-size:14px; }
+
+/* Main */
+.app-main { flex:1; max-width:1400px; width:100%; margin:0 auto; padding:24px 32px; }
+
+/* Buttons */
+.btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 16px; border-radius:6px; font-size:14px; font-weight:500;
+  cursor:pointer; transition:all .15s ease; border:none;
+}
+.btn-primary { background:var(--primary); color:var(--white); }
+.btn-primary:hover { background:var(--primary-hover); }
+.btn-secondary { background:var(--bg-section); color:var(--heading); border:1px solid var(--border-color); }
+.btn-secondary:hover { background:var(--border-color); }
+.btn-outline { background:transparent; color:var(--primary); border:1px solid var(--primary); }
+.btn-outline:hover { background:var(--primary); color:var(--white); }
+
+/* Upload */
+.upload-section { margin-bottom:24px; }
+.drop-zone {
+  border:2px dashed var(--border-color); border-radius:12px; padding:40px;
+  text-align:center; cursor:pointer; transition:all .2s ease; background:var(--white);
+}
+.drop-zone:hover, .drop-zone.active { border-color:var(--primary); background:#fef2f2; }
+.drop-zone.processing { opacity:.6; cursor:wait; }
+.drop-zone h3 { color:var(--heading); font-size:16px; margin-bottom:4px; }
+.drop-zone p { color:var(--secondary-text); font-size:13px; }
+.upload-icon { color:var(--primary); margin-bottom:12px; }
+.uploaded-files { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.file-chip {
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--white); border:1px solid var(--border-color);
+  border-radius:20px; padding:6px 12px; font-size:13px; color:var(--heading);
+}
+.file-chip .remove-btn {
+  background:none; border:none; cursor:pointer; color:var(--secondary-text);
+  font-size:16px; line-height:1; padding:0 2px; border-radius:50%;
+}
+.file-chip .remove-btn:hover { color:var(--primary); }
+
+/* Stats */
+.stats-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+.stat-card {
+  background:var(--white); border-radius:10px; padding:18px 20px;
+  display:flex; align-items:center; gap:14px;
+  border:1px solid var(--border-color); box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+.stat-icon { font-size:28px; flex-shrink:0; }
+.stat-icon.red { color:var(--primary); }
+.stat-icon.orange { color:#f59e0b; }
+.stat-icon.blue { color:#3b82f6; }
+.stat-icon.purple { color:#a855f7; }
+.stat-number { display:block; font-size:26px; font-weight:700; color:var(--heading); line-height:1.1; }
+.stat-label { font-size:12px; color:var(--secondary-text); text-transform:uppercase; letter-spacing:.5px; }
+
+/* Table */
+.case-table-section {
+  background:var(--white); border-radius:10px;
+  border:1px solid var(--border-color); overflow:hidden;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+.table-toolbar {
+  padding:16px 20px; display:flex; align-items:center;
+  justify-content:space-between; border-bottom:1px solid var(--border-color);
+  gap:12px; flex-wrap:wrap;
+}
+.filters { display:flex; gap:10px; align-items:center; }
+.filter-group select {
+  padding:6px 10px; border:1px solid var(--border-color); border-radius:6px;
+  font-size:13px; color:var(--heading); background:var(--white); cursor:pointer;
+}
+.filter-group select:focus { outline:2px solid var(--primary); outline-offset:-1px; }
+.table-wrapper { overflow-x:auto; }
+.case-table { width:100%; border-collapse:collapse; font-size:13px; }
+.case-table thead { background:var(--bg-section); }
+.case-table th {
+  padding:10px 14px; text-align:left; font-weight:600; color:var(--heading);
+  font-size:12px; text-transform:uppercase; letter-spacing:.4px;
+  white-space:nowrap; border-bottom:1px solid var(--border-color); cursor:pointer; user-select:none;
+}
+.case-table th:hover { color:var(--primary); }
+.case-table td { padding:10px 14px; border-bottom:1px solid var(--border-color); color:var(--body-text); }
+.case-table tbody tr:hover { background:#fafafa; }
+.checkbox-col { width:40px; text-align:center; }
+.checkbox-col input[type="checkbox"] { accent-color:var(--primary); cursor:pointer; width:15px; height:15px; }
+.control-num { font-weight:600; color:var(--heading); font-variant-numeric:tabular-nums; }
+.type-badge {
+  display:inline-block; padding:3px 10px; border-radius:12px;
+  font-size:11px; font-weight:600; color:var(--white); white-space:nowrap;
+}
+.date-cell { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.urgency-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap; }
+.urgency-badge.today { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.urgency-badge.tomorrow { background:#fff7ed; color:#ea580c; border:1px solid #fed7aa; }
+.urgency-badge.urgent { background:#fffbeb; color:#d97706; border:1px solid #fde68a; }
+.urgency-badge.upcoming { background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; }
+.urgency-badge.future { background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+.urgency-badge.past { background:var(--bg-section); color:var(--secondary-text); border:1px solid var(--border-color); }
+.urgency-row-today { background:#fffbfb !important; }
+.urgency-row-tomorrow { background:#fffdf8 !important; }
+.location-cell { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.actions-cell { white-space:nowrap; }
+.icon-btn {
+  background:none; border:1px solid var(--border-color); cursor:pointer;
+  padding:6px 8px; border-radius:6px; display:inline-flex; align-items:center;
+  justify-content:center; margin-right:4px; transition:all .15s ease; font-size:13px;
+}
+.icon-btn.text-btn { color:#16a34a; }
+.icon-btn.text-btn:hover { background:#f0fdf4; border-color:#16a34a; }
+.icon-btn.email-btn { color:var(--primary); }
+.icon-btn.email-btn:hover { background:#fef2f2; border-color:var(--primary); }
+.empty-row { text-align:center; padding:32px !important; color:var(--secondary-text); }
+.table-footer { padding:10px 20px; font-size:12px; color:var(--secondary-text); border-top:1px solid var(--border-color); }
+
+/* Empty State */
+.empty-state { text-align:center; padding:60px 20px; }
+.empty-state h3 { color:var(--heading); font-size:18px; margin-bottom:8px; }
+.empty-state p { color:var(--secondary-text); max-width:500px; margin:0 auto 20px; line-height:1.6; }
+.supported-types { display:flex; gap:8px; justify-content:center; }
+
+/* Error */
+.error-banner {
+  background:#fef2f2; color:#dc2626; border:1px solid #fecaca;
+  border-radius:8px; padding:12px 16px; margin-bottom:20px; font-size:14px;
+}
+
+/* Modal */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.5);
+  display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px;
+}
+.modal-content {
+  background:var(--white); border-radius:12px; width:100%; max-width:720px;
+  max-height:85vh; display:flex; flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,.2);
+}
+.modal-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:18px 24px; border-bottom:1px solid var(--border-color);
+}
+.modal-header h2 { color:var(--heading); font-size:18px; font-weight:600; }
+.close-btn {
+  background:none; border:none; cursor:pointer; color:var(--secondary-text);
+  font-size:22px; padding:4px 8px; border-radius:6px; line-height:1;
+}
+.close-btn:hover { color:var(--heading); background:var(--bg-section); }
+.modal-tabs { display:flex; border-bottom:1px solid var(--border-color); padding:0 24px; }
+.tab {
+  display:flex; align-items:center; gap:6px; padding:12px 16px;
+  background:none; border:none; border-bottom:2px solid transparent;
+  font-size:14px; color:var(--secondary-text); cursor:pointer; transition:all .15s ease;
+}
+.tab:hover { color:var(--heading); }
+.tab.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:500; }
+.modal-body { padding:20px 24px; overflow-y:auto; flex:1; }
+.reminder-block { margin-bottom:16px; }
+.block-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.block-header h3 { color:var(--heading); font-size:14px; font-weight:600; }
+.copy-btn {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:5px 10px; background:var(--bg-section); border:1px solid var(--border-color);
+  border-radius:6px; font-size:12px; color:var(--heading); cursor:pointer; transition:all .15s ease;
+}
+.copy-btn:hover { background:var(--border-color); }
+.reminder-text {
+  background:var(--bg-section); border:1px solid var(--border-color); border-radius:8px;
+  padding:16px; font-family:"SF Mono","Fira Code",Menlo,monospace;
+  font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word; color:var(--heading);
+}
+.subject-text { font-weight:600; }
+.bulk-text { max-height:400px; overflow-y:auto; }
+.bulk-actions { display:flex; gap:10px; margin-bottom:16px; }
+
+/* Footer */
+.app-footer {
+  background:var(--dark-charcoal); color:#999; text-align:center; padding:16px; font-size:13px;
+}
+
+/* Responsive */
+@media (max-width:768px) {
+  .app-header { padding:16px; }
+  .header-content { flex-direction:column; align-items:flex-start; }
+  .app-main { padding:16px; }
+  .stats-bar { grid-template-columns:repeat(2,1fr); gap:10px; }
+  .drop-zone { padding:24px; }
+  .table-toolbar { flex-direction:column; align-items:flex-start; }
+  .filters { flex-direction:column; width:100%; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useCallback, useMemo } = React;
+
+/* ─── Utility: Parse Excel ─── */
+function classifyType(surveyType) {
+  if (!surveyType) return "Unknown";
+  const s = surveyType.toLowerCase();
+  if (s.includes("elite")) return "Elite";
+  if (s.includes("high value")) return "High Value";
+  if (s.includes("lender")) return "Lender";
+  return "Unknown";
+}
+
+function parseAppointmentDate(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  if (typeof raw === "number") {
+    const d = XLSX.SSF.parse_date_code(raw);
+    if (d) return new Date(d.y, d.m - 1, d.d, d.H || 0, d.M || 0, d.S || 0);
+    return null;
+  }
+  const str = String(raw).trim();
+  if (!str) return null;
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array", cellDates: false });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const cases = rows.map((row) => {
+          const controlNum = String(row["Control #"] || row["Control#"] || "");
+          const appointmentRaw = row["Appointment Date"] || row["AppointmentDate"] || "";
+          const surveyType = String(row["Survey Type"] || "");
+          const frAssigned = String(row["FR Assigned"] || "");
+          const customerName = String(row["Customer Name #"] || "");
+          const fieldStatus = String(row["Field Status"] || "");
+          const address = String(row["Address"] || "");
+          const city = String(row["City"] || "");
+          const state = String(row["State"] || "");
+          const zip = String(row["Zip"] || "");
+          return {
+            controlNum,
+            appointmentDate: parseAppointmentDate(appointmentRaw),
+            appointmentRaw: String(appointmentRaw),
+            surveyType,
+            caseType: classifyType(surveyType),
+            frAssigned, customerName, fieldStatus,
+            address, city, state, zip,
+            fullAddress: [address, city, state, zip].filter(Boolean).join(", "),
+          };
+        }).filter((c) => c.controlNum && c.controlNum !== "0");
+        resolve(cases);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* ─── Utility: Message Generation ─── */
+function fmtDate(d) {
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+function fmtTime(d) {
+  let h = d.getHours(), m = d.getMinutes(), ap = "AM";
+  if (h >= 12) { ap = "PM"; if (h > 12) h -= 12; }
+  if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2,"0")} ${ap}`;
+}
+function fmtDateTime(d) { return `${fmtDate(d)} at ${fmtTime(d)}`; }
+function daysDiff(d) {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const target = new Date(d); target.setHours(0,0,0,0);
+  return Math.round((target - now) / 86400000);
+}
+function urgencyLabel(d) {
+  const diff = daysDiff(d);
+  if (diff === 0) return "TODAY";
+  if (diff === 1) return "TOMORROW";
+  if (diff <= 3 && diff > 0) return `in ${diff} days`;
+  if (diff <= 7 && diff > 0) return "this week";
+  if (diff < 0) return "PAST";
+  return `on ${fmtDate(d)}`;
+}
+function getUrgencyLevel(d) {
+  if (!d) return "none";
+  const diff = daysDiff(d);
+  if (diff < 0) return "past";
+  if (diff === 0) return "today";
+  if (diff === 1) return "tomorrow";
+  if (diff <= 3) return "urgent";
+  if (diff <= 7) return "upcoming";
+  return "future";
+}
+function generateTextReminder(c) {
+  return `REMINDER: ${c.caseType} Case Appointment ${urgencyLabel(c.appointmentDate).toUpperCase()}
+
+Control #: ${c.controlNum}
+Type: ${c.surveyType}
+Appointment: ${fmtDateTime(c.appointmentDate)}
+Location: ${c.fullAddress}${c.frAssigned ? "\nFR Assigned: " + c.frAssigned : ""}
+
+Please confirm attendance.`;
+}
+function generateEmailSubject(c) {
+  return `${c.caseType} Case #${c.controlNum} - Appointment ${urgencyLabel(c.appointmentDate)}`;
+}
+function generateEmailBody(c) {
+  return `Hello,
+
+This is a reminder that a ${c.caseType} case appointment is scheduled ${urgencyLabel(c.appointmentDate)}.
+
+CASE DETAILS
+-----------------------------------
+Control #:        ${c.controlNum}
+Survey Type:      ${c.surveyType}
+Case Type:        ${c.caseType}
+Field Status:     ${c.fieldStatus}
+
+APPOINTMENT INFORMATION
+-----------------------------------
+Date & Time:      ${fmtDateTime(c.appointmentDate)}
+Location:         ${c.fullAddress}
+FR Assigned:      ${c.frAssigned || "(Unassigned)"}
+${c.customerName ? "Customer:         " + c.customerName : ""}
+
+Please ensure all preparations are in order and confirm attendance for this appointment.
+
+If you need to reschedule or have any questions, please respond to this email promptly.
+
+Thank you.`;
+}
+
+/* ─── Constants ─── */
+const TYPE_COLORS = { Lender:"#3b82f6", Elite:"#a855f7", "High Value":"#f59e0b", Unknown:"#6b7280" };
+const URGENCY_LABELS = { today:"Today", tomorrow:"Tomorrow", urgent:"1-3 Days", upcoming:"This Week", future:"Future", past:"Past", none:"No Date" };
+
+/* ─── Components ─── */
+function FileUpload({ onFilesProcessed, isProcessing }) {
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const processFiles = useCallback((files) => {
+    const valid = Array.from(files).filter(f => f.name.match(/\.(xlsx|xls|csv)$/i));
+    if (!valid.length) return;
+    setUploadedFiles(prev => [...prev, ...valid]);
+    onFilesProcessed(valid);
+  }, [onFilesProcessed]);
+  return (
+    <div className="upload-section">
+      <div
+        className={`drop-zone ${dragActive ? "active" : ""} ${isProcessing ? "processing" : ""}`}
+        onDragEnter={e => { e.preventDefault(); setDragActive(true); }}
+        onDragLeave={e => { e.preventDefault(); setDragActive(false); }}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files?.length) processFiles(e.dataTransfer.files); }}
+        onClick={() => !isProcessing && document.getElementById("file-input").click()}
+      >
+        <input id="file-input" type="file" multiple accept=".xlsx,.xls,.csv" onChange={e => { if (e.target.files?.length) processFiles(e.target.files); }} style={{display:"none"}} disabled={isProcessing} />
+        <div className="upload-icon" style={{fontSize:"36px"}}>&#128194;</div>
+        <h3>{isProcessing ? "Processing files..." : "Drop Excel files here or click to upload"}</h3>
+        <p>Supports .xlsx, .xls, and .csv files</p>
+      </div>
+      {uploadedFiles.length > 0 && (
+        <div className="uploaded-files">
+          {uploadedFiles.map((file, i) => (
+            <div key={i} className="file-chip">
+              <span>&#128196;</span>
+              <span>{file.name}</span>
+              <button className="remove-btn" onClick={e => { e.stopPropagation(); setUploadedFiles(prev => prev.filter((_,j) => j !== i)); }}>&times;</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatsBar({ cases }) {
+  const withAppt = cases.filter(c => c.appointmentDate);
+  const todayCount = withAppt.filter(c => getUrgencyLevel(c.appointmentDate) === "today").length;
+  const weekCount = withAppt.filter(c => { const u = getUrgencyLevel(c.appointmentDate); return ["today","tomorrow","urgent","upcoming"].includes(u); }).length;
+  const lender = cases.filter(c => c.caseType === "Lender").length;
+  const elite = cases.filter(c => c.caseType === "Elite").length;
+  const hv = cases.filter(c => c.caseType === "High Value").length;
+  return (
+    <div className="stats-bar">
+      <div className="stat-card">
+        <div className="stat-icon red">&#128197;</div>
+        <div><span className="stat-number">{withAppt.length}</span><span className="stat-label">With Appointments</span></div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-icon orange">&#9888;&#65039;</div>
+        <div><span className="stat-number">{todayCount}</span><span className="stat-label">Today</span></div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-icon blue">&#9200;</div>
+        <div><span className="stat-number">{weekCount}</span><span className="stat-label">This Week</span></div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-icon purple">&#9989;</div>
+        <div><span className="stat-number">{cases.length}</span><span className="stat-label">{lender}L / {elite}E / {hv}HV</span></div>
+      </div>
+    </div>
+  );
+}
+
+function CaseTable({ cases, onSelectCase, onGenerateAll }) {
+  const [sortField, setSortField] = useState("appointmentDate");
+  const [sortDir, setSortDir] = useState("asc");
+  const [filterType, setFilterType] = useState("all");
+  const [filterUrgency, setFilterUrgency] = useState("all");
+  const [selectedCases, setSelectedCases] = useState(new Set());
+
+  const filtered = useMemo(() => {
+    let list = cases.filter(c => c.appointmentDate);
+    if (filterType !== "all") list = list.filter(c => c.caseType === filterType);
+    if (filterUrgency !== "all") list = list.filter(c => getUrgencyLevel(c.appointmentDate) === filterUrgency);
+    list.sort((a, b) => {
+      let va, vb;
+      if (sortField === "appointmentDate") {
+        va = a.appointmentDate ? a.appointmentDate.getTime() : Infinity;
+        vb = b.appointmentDate ? b.appointmentDate.getTime() : Infinity;
+      } else if (sortField === "controlNum") {
+        va = Number(a.controlNum) || 0; vb = Number(b.controlNum) || 0;
+      } else {
+        va = a[sortField] || ""; vb = b[sortField] || "";
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [cases, filterType, filterUrgency, sortField, sortDir]);
+
+  const toggleSort = (field) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+  };
+  const toggleSelect = (cn) => setSelectedCases(prev => { const n = new Set(prev); n.has(cn) ? n.delete(cn) : n.add(cn); return n; });
+  const toggleAll = () => selectedCases.size === filtered.length ? setSelectedCases(new Set()) : setSelectedCases(new Set(filtered.map(c => c.controlNum)));
+  const arrow = (f) => sortField === f ? (sortDir === "asc" ? " \u25B2" : " \u25BC") : "";
+
+  const fmtShortDate = (d) => {
+    if (!d) return "--";
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    const yyyy = d.getFullYear();
+    return `${mm}/${dd}/${yyyy} ${fmtTime(d)}`;
+  };
+
+  return (
+    <div className="case-table-section">
+      <div className="table-toolbar">
+        <div className="filters">
+          <div className="filter-group">
+            <select value={filterType} onChange={e => setFilterType(e.target.value)}>
+              <option value="all">All Types</option>
+              <option value="Lender">Lender</option>
+              <option value="Elite">Elite</option>
+              <option value="High Value">High Value</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <select value={filterUrgency} onChange={e => setFilterUrgency(e.target.value)}>
+              <option value="all">All Dates</option>
+              <option value="today">Today</option>
+              <option value="tomorrow">Tomorrow</option>
+              <option value="urgent">1-3 Days</option>
+              <option value="upcoming">This Week</option>
+              <option value="future">Future</option>
+            </select>
+          </div>
+        </div>
+        {selectedCases.size > 0 && (
+          <button className="btn btn-primary" onClick={() => onGenerateAll(filtered.filter(c => selectedCases.has(c.controlNum)))}>
+            Generate for {selectedCases.size} Selected
+          </button>
+        )}
+      </div>
+      <div className="table-wrapper">
+        <table className="case-table">
+          <thead>
+            <tr>
+              <th className="checkbox-col"><input type="checkbox" checked={selectedCases.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
+              <th onClick={() => toggleSort("controlNum")}>Control #{arrow("controlNum")}</th>
+              <th onClick={() => toggleSort("caseType")}>Type{arrow("caseType")}</th>
+              <th onClick={() => toggleSort("appointmentDate")}>Appointment{arrow("appointmentDate")}</th>
+              <th>Urgency</th>
+              <th onClick={() => toggleSort("frAssigned")}>FR Assigned{arrow("frAssigned")}</th>
+              <th>Location</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(c => {
+              const urg = getUrgencyLevel(c.appointmentDate);
+              return (
+                <tr key={c.controlNum} className={`urgency-row-${urg}`}>
+                  <td className="checkbox-col"><input type="checkbox" checked={selectedCases.has(c.controlNum)} onChange={() => toggleSelect(c.controlNum)} /></td>
+                  <td className="control-num">{c.controlNum}</td>
+                  <td><span className="type-badge" style={{backgroundColor:TYPE_COLORS[c.caseType]||TYPE_COLORS.Unknown}}>{c.caseType}</span></td>
+                  <td className="date-cell">{fmtShortDate(c.appointmentDate)}</td>
+                  <td><span className={`urgency-badge ${urg}`}>{URGENCY_LABELS[urg]}</span></td>
+                  <td>{c.frAssigned || "--"}</td>
+                  <td className="location-cell" title={c.fullAddress}>{c.city && c.state ? `${c.city}, ${c.state}` : c.fullAddress || "--"}</td>
+                  <td className="actions-cell">
+                    <button className="icon-btn text-btn" title="Text Reminder" onClick={() => onSelectCase(c,"text")}>&#128172;</button>
+                    <button className="icon-btn email-btn" title="Email Reminder" onClick={() => onSelectCase(c,"email")}>&#9993;</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && <tr><td colSpan={8} className="empty-row">No cases with upcoming appointments found.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-footer">Showing {filtered.length} of {cases.filter(c => c.appointmentDate).length} cases with appointments</div>
+    </div>
+  );
+}
+
+function ReminderModal({ caseItem, mode, onClose }) {
+  const [activeTab, setActiveTab] = useState(mode || "text");
+  const [copiedField, setCopiedField] = useState(null);
+  if (!caseItem) return null;
+  const textReminder = generateTextReminder(caseItem);
+  const emailSubject = generateEmailSubject(caseItem);
+  const emailBody = generateEmailBody(caseItem);
+  const copy = async (text, field) => {
+    try { await navigator.clipboard.writeText(text); } catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
+    setCopiedField(field); setTimeout(() => setCopiedField(null), 2000);
+  };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Reminder for Control #{caseItem.controlNum}</h2>
+          <button className="close-btn" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-tabs">
+          <button className={`tab ${activeTab==="text"?"active":""}`} onClick={() => setActiveTab("text")}>&#128172; Text Reminder</button>
+          <button className={`tab ${activeTab==="email"?"active":""}`} onClick={() => setActiveTab("email")}>&#9993; Email Reminder</button>
+        </div>
+        <div className="modal-body">
+          {activeTab === "text" && (
+            <div className="reminder-block">
+              <div className="block-header">
+                <h3>Text Message</h3>
+                <button className="copy-btn" onClick={() => copy(textReminder,"text")}>{copiedField==="text" ? "Copied!" : "Copy"}</button>
+              </div>
+              <pre className="reminder-text">{textReminder}</pre>
+            </div>
+          )}
+          {activeTab === "email" && (
+            <>
+              <div className="reminder-block">
+                <div className="block-header"><h3>Subject Line</h3><button className="copy-btn" onClick={() => copy(emailSubject,"subj")}>{copiedField==="subj" ? "Copied!" : "Copy"}</button></div>
+                <pre className="reminder-text subject-text">{emailSubject}</pre>
+              </div>
+              <div className="reminder-block">
+                <div className="block-header"><h3>Email Body</h3><button className="copy-btn" onClick={() => copy(emailBody,"body")}>{copiedField==="body" ? "Copied!" : "Copy"}</button></div>
+                <pre className="reminder-text">{emailBody}</pre>
+              </div>
+              <div className="reminder-block">
+                <div className="block-header">
+                  <h3>Full Email (Subject + Body)</h3>
+                  <button className="copy-btn" onClick={() => copy(`Subject: ${emailSubject}\n\n${emailBody}`,"full")}>{copiedField==="full" ? "Copied!" : "Copy Full Email"}</button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkPreview({ cases, onClose }) {
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [activeTab, setActiveTab] = useState("text");
+  if (!cases || !cases.length) return null;
+  const allTexts = cases.map(c => generateTextReminder(c)).join("\n\n---\n\n");
+  const allEmails = cases.map(c => `Subject: ${generateEmailSubject(c)}\n\n${generateEmailBody(c)}`).join("\n\n========================================\n\n");
+  const copyAll = async () => {
+    const content = activeTab === "text" ? allTexts : allEmails;
+    try { await navigator.clipboard.writeText(content); } catch { const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
+    setCopiedAll(true); setTimeout(() => setCopiedAll(false), 2000);
+  };
+  const download = () => {
+    const content = activeTab === "text" ? allTexts : allEmails;
+    const blob = new Blob([content], { type:"text/plain" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = activeTab === "text" ? "text-reminders.txt" : "email-reminders.txt";
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" style={{maxWidth:"800px"}} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Bulk Reminders ({cases.length} cases)</h2>
+          <button className="close-btn" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-tabs">
+          <button className={`tab ${activeTab==="text"?"active":""}`} onClick={() => setActiveTab("text")}>&#128172; All Text Reminders</button>
+          <button className={`tab ${activeTab==="email"?"active":""}`} onClick={() => setActiveTab("email")}>&#9993; All Email Reminders</button>
+        </div>
+        <div className="modal-body">
+          <div className="bulk-actions">
+            <button className="btn btn-primary" onClick={copyAll}>{copiedAll ? "Copied!" : "Copy All"}</button>
+            <button className="btn btn-secondary" onClick={download}>Download .txt</button>
+          </div>
+          <pre className="reminder-text bulk-text">{activeTab === "text" ? allTexts : allEmails}</pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── App ─── */
+function App() {
+  const [cases, setCases] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState(null);
+  const [modalCase, setModalCase] = useState(null);
+  const [modalMode, setModalMode] = useState("text");
+  const [bulkCases, setBulkCases] = useState(null);
+
+  const handleFiles = useCallback(async (files) => {
+    setIsProcessing(true); setError(null);
+    try {
+      const all = [];
+      for (const file of files) { const parsed = await parseExcelFile(file); all.push(...parsed); }
+      const seen = new Set();
+      const deduped = all.filter(c => { if (seen.has(c.controlNum)) return false; seen.add(c.controlNum); return true; });
+      setCases(prev => {
+        const existing = new Set(prev.map(c => c.controlNum));
+        return [...prev, ...deduped.filter(c => !existing.has(c.controlNum))];
+      });
+    } catch (err) { setError("Error processing file: " + err.message); }
+    finally { setIsProcessing(false); }
+  }, []);
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="header-left">
+            <h1>Case Appointment Reminders</h1>
+            <p className="subtitle">Upload Excel files to auto-generate text and email reminders for upcoming appointments</p>
+          </div>
+          {cases.length > 0 && <button className="btn btn-outline" onClick={() => { setCases([]); setError(null); }}>Clear All</button>}
+        </div>
+      </header>
+      <main className="app-main">
+        <FileUpload onFilesProcessed={handleFiles} isProcessing={isProcessing} />
+        {error && <div className="error-banner">{error}</div>}
+        {cases.length > 0 && (
+          <>
+            <StatsBar cases={cases} />
+            <CaseTable cases={cases} onSelectCase={(c,m) => { setModalCase(c); setModalMode(m); }} onGenerateAll={setBulkCases} />
+          </>
+        )}
+        {cases.length === 0 && !isProcessing && (
+          <div className="empty-state">
+            <h3>No cases loaded</h3>
+            <p>Upload your Lender, Elite, or High Value case Excel files above to get started. Cases with upcoming appointments will be displayed with options to generate text and email reminders.</p>
+            <div className="supported-types">
+              <span className="type-badge" style={{backgroundColor:"#3b82f6"}}>Lender</span>
+              <span className="type-badge" style={{backgroundColor:"#a855f7"}}>Elite</span>
+              <span className="type-badge" style={{backgroundColor:"#f59e0b"}}>High Value</span>
+            </div>
+          </div>
+        )}
+      </main>
+      <footer className="app-footer"><p>Case Appointment Reminder Dashboard</p></footer>
+      {modalCase && <ReminderModal caseItem={modalCase} mode={modalMode} onClose={() => setModalCase(null)} />}
+      {bulkCases && <BulkPreview cases={bulkCases} onClose={() => setBulkCases(null)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
